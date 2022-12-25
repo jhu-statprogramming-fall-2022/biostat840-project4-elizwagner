@@ -71,13 +71,7 @@ If we look at the [TidyTuesday github repo](https://github.com/rfordatascience/t
 Column {data-width=600}
 -------------------------------------
 
-```{r}
-#video goes here
-library(vembedr)
-video <- "https://youtu.be/oVDqTxvMllI"
-embed_url(video) %>%
-div(class = "vembedr")
-```
+
 
 
 The Data {data-orientation=rows}
