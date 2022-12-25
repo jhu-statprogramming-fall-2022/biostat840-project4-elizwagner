@@ -1,0 +1,498 @@
+---
+title: "Missions in Space"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    social: menu
+    source_code: embed
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(tidyverse)
+library(janitor)
+library(knitr)
+library(stringr)
+library(tidyr)
+library(lubridate)
+library(purrr)
+library(forcats)
+library(waffle)
+library(here)
+library(ggplot2)
+library(shiny)
+# tests if a directory named "data" exists locally
+if(!dir.exists(here("data"))) { dir.create(here("data")) }
+
+# saves data only once (not each time you knit a R Markdown)
+if(!file.exists(here("data","astronauts.RDS"))) {
+  url_csv <- 'https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-14/astronauts.csv'
+  astronauts <- readr::read_csv(url_csv)
+  
+  # save the file to RDS objects
+  saveRDS(astronauts, file= here("data","astronauts.RDS"))
+}
+
+astronauts <- readRDS(here("data","astronauts.RDS"))
+```
+
+```{r astronaut_recode}
+astronauts <- astronauts %>%
+  mutate(age = (lubridate::year(today()))-year_of_birth,
+         age_at_mission = year_of_mission-year_of_birth, 
+         mission_decade = as.factor (case_when(
+           year_of_mission < 1971 ~ "1960-1970",
+           year_of_mission >= 1971 & year_of_mission < 1981  ~ "1971-1980",
+           year_of_mission>= 1981  & year_of_mission < 1991 ~ "1981-1990",
+           year_of_mission>= 1991  & year_of_mission < 2001 ~ "1991-2000",
+           year_of_mission>= 2001  & year_of_mission < 2011 ~ "2001-2010",
+           year_of_mission>= 2011  & year_of_mission < 2020 ~ "2011-2020",
+           TRUE ~ "Unknown")))
+
+astronauts <- astronauts %>%
+  select(4, 6, 7, 8, 9, 12, 13:16, 20, 21, 25, 26, 27)
+
+new_data <- astronauts %>% 
+  distinct(mission_title, .keep_all = TRUE) 
+```
+About
+=====================================  
+The purpose of this dashboard is to explore how features of songs in different genres vary. As well, we are interested in comparing the overall popularity of different genres of music and how the musical features affect popularity. The data and data dictionary can be found [here](https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-01-21).
+
+
+
+This is a data set about astronauts and the missions they went on. I want to know how many missions there were per country and per astronaut. I also want to know the kinds of jobs, gender, and the nationality of most astronauts, their age, and who spent the most time in missions.
+
+If we look at the [TidyTuesday github repo](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-07-14/) from 2020, we see this dataset contains astronaut information that goes back to the 1960's.
+
+[Here](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-07-14/readme.md#data-dictionary) is a data dictionary for what all the column names mean. 
+
+    
+Column {data-width=600}
+-------------------------------------
+
+```{r}
+#video goes here
+library(vembedr)
+vid <- "https://youtu.be/BbRjG056D-Q"
+embed_url(vid) %>%
+div(class = "vembedr")
+```
+
+
+The Data {data-orientation=rows}
+=====================================     
+Row {data-height=100}
+-------------------------------------
+This dataset contains information of all astronauts that went on missions through the 2000's. It has information about their nationalities, gender, job, whether they were in the military or whether they were a civilian, and the name of the missions they went on. 
+
+Row {data-height=900}
+-------------------------------------
+### Data we are using listed per astronaut
+
+```{r}
+table_astro_general <- astronauts %>%
+  select(name, nationality,sex, year_of_birth, year_of_mission, hours_mission)
+DT::renderDataTable(table_astro_general)
+```
+
+### Count of astronauts per country 
+
+```{r}
+data2 <- astronauts %>%
+  group_by(nationality) %>% 
+  summarise(n=n(),
+            .groups = 'drop')
+
+data2$nationality <- factor(data2$nationality, levels = data2$nationality[order(data2$n)])
+
+ renderPlot({
+  ggplot(data2, aes(x = nationality, n)) +
+  geom_bar(stat = "identity") +
+  coord_flip()})
+```
+
+Interactive: Time in Space 
+=====================================     
+Column {.sidebar}
+-----------------------------------------------------------------------
+```{r}
+astronauts2 <- astronauts %>%
+ add_count(nationality) %>% 
+  filter(n > 2) %>% 
+  mutate(days_in_space = hours_mission/24)
+  
+  
+
+selectInput("v_nationality", label="Country",  choices = unique(astronauts2$nationality))
+```
+Column {data-width=500}
+-----------------------------------------------------------------------
+### Women 
+
+```{r}
+renderPlot({
+ astronauts2 %>%
+  subset(sex == "female" & mission_number==1)%>%
+  filter(str_detect(nationality, if_else(input$v_nationality == "", "", input$v_nationality))) %>%
+  ggplot(aes(fill = military_civilian, y = fct_reorder(name,
+                         days_in_space), x= days_in_space))+
+  geom_bar(position="dodge", stat="identity")+
+  labs(x="Time in days", y= "Name", title="Time spent in days on their first mission", caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv", subtitle = "By name and civilian or miliatry status")+ 
+     scale_fill_brewer(palette = "Pastel2", name = "Status")+
+    theme(axis.text.y = element_text(angle = 25))
+})
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+### Men 
+
+```{r}
+renderPlot({
+ astronauts2 %>% 
+  subset(sex == "male" & mission_number==1)%>%
+  filter(str_detect(nationality, if_else(input$v_nationality == "", "", input$v_nationality))) %>%
+  ggplot(aes(fill = military_civilian, y = fct_reorder(name,
+                         days_in_space), x= days_in_space))+
+  geom_bar(position="dodge", stat="identity")+
+  labs(x="Time in days", y= "Name", title="Time spent in days on their first mission", caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv", subtitle = "By name and civilian or miliatry status")+ 
+  scale_fill_brewer(palette = "Set2",name = "Status")+
+    theme(axis.text.y = element_text(angle = 25))
+})
+```
+
+Interactive: Ages and Mission Times
+=====================================     
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+selected_data <- reactive({
+  data <- brushedPoints(new_data, input$plot1_brush)
+  if (nrow(data) == 0)
+    data <- new_data
+  data
+})
+```
+
+
+
+```{r}
+  plotOutput("plot1", brush = brushOpts(id = "plot1_brush"))
+  output$plot1 <- renderPlot({
+  new_data %>% 
+  ggplot(aes(x = year_of_mission, y=age_at_mission, color=nationality, shape=sex)) +
+  geom_point(size=2.5) + 
+  labs(x="Year of Mission", y= "Age at Mission", title="Age of Astronaut in Years at Time of Mission", caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv", subtitle = "Per country and by gender", color = "Country", shape = "Gender")
+})
+```
+
+```{r}
+selected_data_country <- reactive({
+astronauts_usethis <- selected_data() %>% 
+   mutate(Days = hours_mission/24)%>%
+  mutate(occupation = as.factor(occupation))%>%
+  mutate(Job =  as.factor(fct_collapse(occupation,
+               Pilot = c("Pilot", "pilot"), 
+               Commander = "commander",
+               "Space Tourist" = c("Other (space tourist)", "Space tourist"),
+               "Flight Engineer" = "flight engineer")
+               ))
+
+astronauts_1 <- astronauts_usethis %>% 
+  mutate(nationality = as.factor(nationality)) %>%
+  mutate(nationality_grouped = as.factor(fct_collapse(nationality,
+  Europe = c("France", "Germany", "Romania", "Austria", "Italy", "Switzerland", "Spain", "Bulgaria", "Poland", "Hungry", "Netherland", "Belgium", "Slovakia", "Sweden", "Czechoslovakia", "Denmark", "U.K.", "U.K./U.S."),
+  Asia = c("Mongolia", "Japan", "China", "Vietnam", "India", "Malysia", "Korea", "Kazakhstan", "Afghanistan", "Syria", "Saudi Arabia", "Israel", "UAE"), 
+  USA = "U.S.", 
+  "USSR/Russia" = "U.S.S.R/Russia",
+  "USSR/Ukraine" = "U.S.S.R/Ukraine", 
+  "North America" = c("Mexico", "Cuba", "Canada"), 
+  "South America" = "Brazil")))
+
+output <- astronauts_1  %>% 
+  group_by(mission_decade,nationality_grouped)%>%
+  summarise(average_hours = mean(hours_mission), 
+            average_days = mean(hours_mission/24))
+return(output)
+})
+```
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+library(plotly)
+renderPlotly({
+p <- selected_data_country() %>%
+ggplot(aes(x=mission_decade, y=average_days, color=nationality_grouped, group=nationality_grouped)) +
+  geom_line()+
+  geom_point(size=2) + 
+  labs(x="Decade", y= "Average Days in Space", title="Average Days in Space by Decade", caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv", subtitle = "Per Missions in each Decade by Country/Region", color = "Country/Region")+
+  theme(axis.text.x = element_text(angle = 25))
+ggplotly(p)
+})
+```
+
+### Chart C
+
+```{r}
+renderTable({
+  selected_data()
+})
+```
+
+
+
+Static: Missions by gender and civilian status {data-orientation=rows}
+=====================================     
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Gender of Astronauts
+
+```{r}
+astro_chart <- astronauts %>% 
+   mutate(Days = hours_mission/24)%>%
+  mutate(nationality = as.factor(nationality)) %>%
+  mutate(nationality_grouped = as.factor(fct_collapse(nationality,
+  Europe = c("France", "Germany", "Romania", "Austria", "Italy", "Switzerland", "Spain", "Bulgaria", "Poland", "Hungry", "Netherland", "Belgium", "Slovakia", "Sweden", "Czechoslovakia", "Denmark", "U.K.", "U.K./U.S."),
+  Asia = c("Mongolia", "Japan", "China", "Vietnam", "India", "Malysia", "Korea", "Kazakhstan", "Afghanistan", "Syria", "Saudi Arabia", "Israel", "UAE"), 
+  USA = "U.S.", 
+  "USSR/Russia" = "U.S.S.R/Russia",
+  "USSR/Ukraine" = "U.S.S.R/Ukraine", 
+  "North America" = c("Mexico", "Cuba", "Canada"), 
+  "South America" = "Brazil")))
+
+astro_chart_1 <- astro_chart %>% 
+  add_count(nationality) %>% 
+  filter(n > 5) 
+
+astro_chart_1 <- astro_chart_1 %>%
+  distinct(name, .keep_all = TRUE) %>%
+  group_by(nationality_grouped)
+
+ renderPlot({ggplot(astro_chart_1, aes(year_of_mission, fill = sex)) +
+  geom_bar(position="fill")+
+  facet_grid(nationality_grouped ~ ., scales = "free")+ 
+  scale_fill_brewer(palette = "Pastel1",name = "Gender")+
+  ggtitle("Gender of astronauts as a proportion by year of mission",
+               subtitle = "Faceted by regions that had more than 5 missions")+
+  xlab("Year of mission") + ylab("Gender as a proportion")+ labs(caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv")})
+```
+
+### Waffle Plot of Gender
+
+
+```{r}
+astro_summarized <-
+  astro_chart %>%
+  distinct(name, .keep_all = TRUE)%>%
+  group_by(nationality_grouped, sex) %>%
+  summarize(n = n())%>% 
+  filter(nationality_grouped=="USSR/Russia"|nationality_grouped=="USA"|nationality_grouped=="Asia"|nationality_grouped=="Europe" ) 
+  
+  renderPlot({ggplot(astro_summarized, aes(fill = sex, values = n)) +
+  geom_waffle() +
+  labs(fill = "Gender", title="Gender summarized for all missions, in Asia, Europe, USA, and USSR/Russia", caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv", subtitle = "Faceted by Country/Region")+ 
+  facet_wrap(~ nationality_grouped, scales = "free")+
+  theme_void()+ 
+  scale_fill_brewer(palette = "Accent")})
+```
+
+### US 
+
+```{r}
+astro_chart2 <- astronauts %>%
+  distinct(name, .keep_all = TRUE) %>%
+  filter(nationality == "U.S.")
+
+  renderPlot({ggplot(astro_chart2, aes(age_at_mission, fill = sex)) +
+  geom_bar(position="fill")+
+  facet_wrap(mission_decade ~ .,)+ 
+  scale_fill_brewer(palette = "Paired",name = "Gender")+
+  ggtitle("Gender of astronauts by age in the US",
+               subtitle = "Faceted by decade")+
+  xlab("Age at mission") + ylab("Number of astronauts")+ labs(caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv")})
+```
+
+### Russia/USSR
+
+```{r}
+astro_chart4 <- astronauts %>%
+  distinct(name, .keep_all = TRUE) %>%
+  filter(nationality == "U.S.S.R/Russia")
+
+renderPlot({ggplot(astro_chart4, aes(age_at_mission, fill=sex)) +
+   geom_bar(position="fill")+
+ facet_wrap(mission_decade ~ .,)+ 
+  scale_fill_brewer(palette = "Dark2",name = "Gender")+
+  ggtitle("Gender of astronauts by age in Russia/USSR",
+               subtitle = "Faceted by decade")+
+  xlab("Age at mission") + ylab("Number of astronauts")+ labs(caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv")})
+```
+
+Static: Missions overall  {data-orientation=columns}
+=====================================   
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### Russia/USSR
+
+```{r}
+astronauts_usethis <- astronauts %>% 
+   mutate(Days = hours_mission/24)%>%
+  mutate(occupation = as.factor(occupation))%>%
+  mutate(Job =  as.factor(fct_collapse(occupation,
+               Pilot = c("Pilot", "pilot"), 
+               Commander = "commander",
+               "Space Tourist" = c("Other (space tourist)", "Space tourist"),
+               "Flight Engineer" = "flight engineer")
+               ))
+
+astronauts_1 <- astronauts_usethis %>% 
+  mutate(nationality = as.factor(nationality)) %>%
+  mutate(nationality_grouped = as.factor(fct_collapse(nationality,
+  Europe = c("France", "Germany", "Romania", "Austria", "Italy", "Switzerland", "Spain", "Bulgaria", "Poland", "Hungry", "Netherland", "Belgium", "Slovakia", "Sweden", "Czechoslovakia", "Denmark", "U.K.", "U.K./U.S."),
+  Asia = c("Mongolia", "Japan", "China", "Vietnam", "India", "Malysia", "Korea", "Kazakhstan", "Afghanistan", "Syria", "Saudi Arabia", "Israel", "UAE"), 
+  USA = "U.S.", 
+  "USSR/Russia" = "U.S.S.R/Russia",
+  "USSR/Ukraine" = "U.S.S.R/Ukraine", 
+  "North America" = c("Mexico", "Cuba", "Canada"), 
+  "South America" = "Brazil")))
+
+
+astrochart3 <- astronauts_1 %>%
+  distinct(mission_title, .keep_all = TRUE) %>%
+  filter(nationality_grouped == "USSR/Russia"|nationality_grouped=="USA"| nationality_grouped=="Europe"| nationality_grouped=="Asia") 
+
+  renderPlot({ggplot(astrochart3, aes(nationality_grouped,Days, fill=nationality_grouped)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45,hjust = 1))+
+  facet_wrap(~ mission_decade, scales = "free")+
+  ggtitle("Boxplot of Days of Missions",
+               subtitle = "Region or Country by Decade")+
+  xlab("Country or Region") + ylab("Days")+ labs(caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv")+
+  scale_fill_brewer(palette = 4,name = "Country/Region")})
+```
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### World's share of missions 
+
+```{r}
+astro_df_7 <- astronauts_1  %>% 
+  add_count(nationality) %>% 
+  filter(n > 5) %>% 
+  group_by(mission_decade,nationality_grouped)%>%
+  summarise(average_hours = mean(hours_mission), 
+            average_days = mean(Days))
+
+astro_df_2 <- astronauts_1  %>% 
+  filter(nationality_grouped=="USA")%>%
+  group_by(mission_decade,nationality_grouped)%>%
+  summarise(average_hours = mean(hours_mission), 
+            average_days = mean(Days))
+
+astro_df_3 <- astronauts_1  %>% 
+  filter(nationality_grouped=="USSR/Russia")%>%
+  group_by(mission_decade,nationality_grouped)%>%
+  summarise(average_hours = mean(hours_mission), 
+            average_days = mean(Days))
+
+astro_df_4<- astronauts_1  %>% 
+  filter(nationality_grouped=="Asia")%>%
+  group_by(mission_decade,nationality_grouped)%>%
+  summarise(average_hours = mean(hours_mission), 
+            average_days = mean(Days))
+
+astro_df_5 <- astronauts_1  %>% 
+  filter(nationality_grouped=="Europe")%>%
+  group_by(mission_decade,nationality_grouped)%>%
+  summarise(average_hours = mean(hours_mission), 
+            average_days = mean(Days))
+
+astro_df_all<-full_join(full_join(astro_df_2,astro_df_3),full_join(astro_df_5,astro_df_4))
+
+
+   renderPlot({ ggplot(astro_df_all, aes(fill = nationality_grouped, values = average_days)) +
+  expand_limits(x=c(0,0), y=c(0,0)) +
+  coord_equal() +
+  labs(fill = NULL, colour = NULL)+
+  geom_waffle(
+    n_rows = 10, size = 1, colour = "white", 
+    make_proportional = TRUE
+  )+theme_void()+
+  labs(title="Waffle Summary Plot of Average Days of Missions", caption = "Data source: Tidy Tuesday 2020-07-14, astronauts.csv", subtitle = "By Country/Region")+ 
+  scale_fill_brewer(palette = "Set2",name = "Country/Region")})
+```
+
+Analysis
+=====================================  
+
+USA and Russia have had the most missions, and have had the most astronauts on missions. Men are more frequently on missions than women. Most women are citizens instead of military. Although USA has more missions than Russia, Russia has longer missions (as seen in the data by days and hours). Most astronauts only go on one mission, but men have gone on as many as 6. As time has gone on, missions and time of missions is trending upwards, we are seeing more women astronauts, and the age of astronauts is increasing. It looks like gender and job whiloe on the mission is possibly dependent on one another. Also gender and military or civilian status. We have to note though, there are so many more men than women. These might not be great analyses on the connection between the gender and other variables. 
+
+Row {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Hours spent in space and gender
+
+```{r}
+m1 <- glm(astronauts$total_hrs_sum ~  astronauts$sex)
+
+summary(m1) 
+```
+
+### Military and civilian status and gender
+
+```{r}
+tabledat1 <-table(astronauts$sex, astronauts$military_civilian)
+chisq.test(tabledat1) 
+```
+
+
+Row {.tabset .tabset-fade}
+-------------------------------------
+   
+### Hours spent in space and age
+
+```{r}
+dff <- astronauts %>%
+  mutate(age = (lubridate::year(today()))-year_of_birth,
+         age_at_mission = year_of_mission-year_of_birth)
+renderPlot({ggplot(astronauts, aes(total_hrs_sum, age_at_mission)) +
+  geom_point() +
+  geom_smooth(method = "lm")})
+```
+ 
+### Gender and job
+    
+```{r}
+astronauts_use <- astronauts %>% 
+   mutate(Days = hours_mission/24)%>%
+  mutate(occupation = as.factor(occupation))%>%
+  mutate(job =  as.factor(fct_collapse(occupation,
+               Pilot = c("Pilot", "pilot"), 
+               Commander = "commander",
+               "Space Tourist" = c("Other (space tourist)", "Space tourist"),
+               "Flight Engineer" = "flight engineer")
+               ))
+
+tabledat <-table(astronauts_use$sex, astronauts_use$job)
+chisq.test(tabledat) 
+```
+
+
+
+
