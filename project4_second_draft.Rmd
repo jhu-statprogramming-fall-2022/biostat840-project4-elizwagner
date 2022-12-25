@@ -60,9 +60,6 @@ new_data <- astronauts %>%
 ```
 About
 =====================================  
-The purpose of this dashboard is to explore how features of songs in different genres vary. As well, we are interested in comparing the overall popularity of different genres of music and how the musical features affect popularity. The data and data dictionary can be found [here](https://github.com/rfordatascience/tidytuesday/tree/master/data/2020/2020-01-21).
-
-
 
 This is a data set about astronauts and the missions they went on. I want to know how many missions there were per country and per astronaut. I also want to know the kinds of jobs, gender, and the nationality of most astronauts, their age, and who spent the most time in missions.
 
