@@ -1,3 +1,0 @@
-name: "my-website"
-output_dir: "_site"
-include: ["dashboard.Rmd"]
