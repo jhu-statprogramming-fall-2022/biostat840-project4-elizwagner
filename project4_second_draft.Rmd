@@ -74,8 +74,8 @@ Column {data-width=600}
 ```{r}
 #video goes here
 library(vembedr)
-vid1 <- "https://youtu.be/oVDqTxvMllI"
-embed_url(vid1) %>%
+video <- "https://youtu.be/oVDqTxvMllI"
+embed_url(video) %>%
 div(class = "vembedr")
 ```
 
